@@ -139,7 +139,7 @@ class FaceDetector:
 	#img: Main image to be used as background
 	#landmark_dict: Includes points obtained using face landmark detection
 	#colors: If given, use this colors, else, get random colors
-	#remove_bg: If True, use white background (currently obsolote)
+	#remove_bg: If True, use white background (currently obsolete)
 	def voronoi(self, img, landmark_dict, colors = None, remove_bg = False):
 		if remove_bg:
 			img_copy = np.full(img.shape, 255, dtype = np.uint8)
