@@ -232,7 +232,7 @@ class FaceDetector:
 			cv2.imshow('result', face_rect)
 
 			if cv2.waitKey(1) & 0xFF == ord('q'):
-				break
+				break			
 
 			j += 1
 
@@ -319,3 +319,4 @@ if __name__ == '__main__':
 	fd = FaceDetector()
 
 	fd.triangulate_cam_face(0, generate_bg = True, generate_bg_once = True, use_white_bg = True, triangulate_bg = False)
+	#fd.voronoi_cam_face(0)
