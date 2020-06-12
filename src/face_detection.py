@@ -107,21 +107,99 @@ class FaceDetector:
 				cv2.fillConvexPoly(img_copy, t_pts, (rb, rg, rr))
 		
 		return img_copy
+
+	def voronoi(self, img, landmark_dict, colors = None, remove_bg = False):
+		if remove_bg:
+			img_copy = np.full(img.shape, 255, dtype = np.uint8)
+		else:
+			img_copy = img.copy()
+
+		bg = None
+
+		for landmark in landmark_dict:
+			landmark_points = landmark_dict[landmark]
+			hull_pts = np.int32(landmark_points)
+
+			convex_hull = cv2.convexHull(hull_pts)
+			hull_rect = cv2.boundingRect(convex_hull)
+
+			size = img.shape
+			rect = (0, 0, size[1], size[0])
+
+			subdiv = cv2.Subdiv2D(rect)
+			subdiv.insert(landmark_points)
+
+			(facets, centers) = subdiv.getVoronoiFacetList([])
+
+			for i in range(len(facets)):
+				if colors:
+					(rb, rg, rr) = colors[i]
+				else:
+					(rb, rg, rr) = self.pick_random_colors(1)[0]
+
+				ith_facet = list()
+
+				for f in facets[i]:
+					ith_facet.append(f)
+
+				ith_facet = np.array(ith_facet, np.int)
+
+				cv2.fillConvexPoly(img_copy, ith_facet, (rb, rg, rr))
 		
-	def triangulate_cam_face(self, cam_id = 0):
+		return img_copy
+		
+	def triangulate_cam_face(self, cam_id = 0, resizeable = True, num_color_sets = 2, change_per_k_frame = 20):
 		cap = cv2.VideoCapture(cam_id)
+
 		i = 0 #Color change counter
-		n = 2 #Number of color sets
+		n = num_color_sets #Number of color sets
 
 		j = 0 #Frame counter
-		k = 10 #Frame limit
+		k = change_per_k_frame #Frame limit
 
 		colors = [self.pick_random_colors(130) for k in range(n)]
+
+		if resizeable:
+			cv2.namedWindow('result', cv2.WINDOW_NORMAL)
+
+		while True:
+			ret, frame = cap.read()
+			try:
+				face_rect = self.triangulation(frame, self.detect_face(frame), colors = colors[i], remove_bg = True)
+				cv2.imshow('result', face_rect)
+			except:
+				pass
+
+			if cv2.waitKey(1) & 0xFF == ord('q'):
+				break
+
+			j += 1
+
+			if j % k == 0:
+				i = (i + 1) % n
+				j = 0
+
+		cap.release()
+		cv2.destroyAllWindows()
+
+	def voronoi_cam_face(self, cam_id = 0, resizeable = True, num_color_sets = 2, change_per_k_frame = 20):
+		cap = cv2.VideoCapture(cam_id)
+		
+		i = 0 #Color change counter
+		n = num_color_sets #Number of color sets
+
+		j = 0 #Frame counter
+		k = change_per_k_frame #Frame limit
+
+		colors = [self.pick_random_colors(130) for k in range(n)]
+
+		if resizeable:
+			cv2.namedWindow('result', cv2.WINDOW_NORMAL)
 
 		while True:
 			ret, frame = cap.read()
 
-			face_rect = self.triangulation(frame, self.detect_face(frame), colors = colors[i], remove_bg = True)
+			face_rect = self.voronoi(frame, self.detect_face(frame), colors = colors[i], remove_bg = True)
 			cv2.imshow('result', face_rect)
 
 			if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -132,6 +210,9 @@ class FaceDetector:
 			if j % k == 0:
 				i = (i + 1) % n
 				j = 0
+
+		cap.release()
+		cv2.destroyAllWindows()
 
 	def pick_random_colors(self, n):
 		colors = list()
@@ -145,4 +226,4 @@ class FaceDetector:
 if __name__ == '__main__':
 	fd = FaceDetector()
 
-	fd.triangulate_cam_face(0)
+	fd.voronoi_cam_face(0)
