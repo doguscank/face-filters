@@ -79,8 +79,9 @@ class FaceDetector:
 	#remove_bg: If True, use white background
 	#generate_bg: If True, use background image given or generate a random background
 	#bg_given: If given and "generate_bg" parameter is True, use it as background of image
+	#exclude_pts: Remove given points from landmark points list, if not None
 	def triangulation(self, img, landmark_dict, colors = None, remove_bg = False,
-		generate_bg = True, bg_given = None):
+		generate_bg = True, bg_given = None, exclude_pts = None):
 		if remove_bg:
 			img_copy = np.full(img.shape, 255, dtype = np.uint8)
 		elif generate_bg:
@@ -95,6 +96,11 @@ class FaceDetector:
 
 		for landmark in landmark_dict:
 			landmark_points = landmark_dict[landmark]
+			#Remove points from landmark points if "exclude_pts" parameters is not None
+			if exclude_pts:
+				for i, e in enumerate(exclude_pts):
+					landmark_points.pop(e - 1 - i)
+
 			#Landmark points are covnerted to int32 in order to use construct convex hull
 			hull_pts = np.int32(landmark_points)
 
@@ -188,9 +194,10 @@ class FaceDetector:
 	#Note: Creating backgrounds in every iteration is not recommended!
 	#use_white_bg: Uses white background without taking care of other parameters
 	#triangulate_bg: If true, created background will be triangulated
+	#exclude_pts: Remove given points from landmark points list, if not None
 	def triangulate_cam_face(self, cam_id = 0, resizeable = True, num_color_sets = 2,
 		change_per_k_frame = 20, generate_bg = True, generate_bg_once = True, use_white_bg = False,
-		triangulate_bg = True):
+		triangulate_bg = True, exclude_pts = None):
 		cap = cv2.VideoCapture(cam_id)
 
 		i = 0 #Color change counter
@@ -228,7 +235,8 @@ class FaceDetector:
 				bg_to_use_c = bg_to_use.copy()
 
 			face_rect = self.triangulation(frame, self.detect_face(frame), colors = colors[i],
-				remove_bg = use_white_bg, generate_bg = generate_bg, bg_given = bg_to_use_c)
+				remove_bg = use_white_bg, generate_bg = generate_bg, bg_given = bg_to_use_c,
+				exclude_pts = exclude_pts)
 			cv2.imshow('result', face_rect)
 
 			if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -318,5 +326,5 @@ class FaceDetector:
 if __name__ == '__main__':
 	fd = FaceDetector()
 
-	fd.triangulate_cam_face(0, generate_bg = True, generate_bg_once = True, use_white_bg = True, triangulate_bg = False)
+	fd.triangulate_cam_face(0, generate_bg = True, generate_bg_once = True, use_white_bg = True, triangulate_bg = False, exclude_pts = [42, 39, 44, 47, 29, 33, 35, 62, 52, 63, 64, 65, 66, 67, 68, 61, 59, 57, 60, 56, 49, 37, 46])
 	#fd.voronoi_cam_face(0)
