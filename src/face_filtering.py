@@ -89,10 +89,9 @@ class FaceDetector:
 				img_copy = bg_given
 			else:
 				img_copy = self.generate_square_background(img)
+
 		else:
 			img_copy = img.copy() #Copy image to not affect the original one
-
-		bg = None
 
 		for landmark in landmark_dict:
 			landmark_points = landmark_dict[landmark]
@@ -166,10 +165,11 @@ class FaceDetector:
 			subdiv.insert(landmark_points)
 
 			(facets, centers) = subdiv.getVoronoiFacetList([])
+			k = len(colors)
 
 			for i in range(len(facets)):
 				if colors:
-					(rb, rg, rr) = colors[i]
+					(rb, rg, rr) = colors[i % k]
 				else:
 					(rb, rg, rr) = self.pick_random_colors(1)[0]
 
@@ -195,9 +195,11 @@ class FaceDetector:
 	#use_white_bg: Uses white background without taking care of other parameters
 	#triangulate_bg: If true, created background will be triangulated
 	#exclude_pts: Remove given points from landmark points list, if not None
+	#voronoi_bg: If True, create a Voronoi Diagram from the first frame obtained and use it
+	#as background for triangulated face mask
 	def triangulate_cam_face(self, cam_id = 0, resizeable = True, num_color_sets = 2,
 		change_per_k_frame = 20, generate_bg = True, generate_bg_once = True, use_white_bg = False,
-		triangulate_bg = True, exclude_pts = None):
+		triangulate_bg = True, exclude_pts = None, voronoi_bg = False):
 		cap = cv2.VideoCapture(cam_id)
 
 		i = 0 #Color change counter
@@ -214,6 +216,10 @@ class FaceDetector:
 		if use_white_bg:
 			generate_bg_once = True
 			generate_bg = False
+			voronoi_bg = False
+		#If "use_white_bg" is False and "voronoi_bg" is True, do not take care of other background parameters
+		elif voronoi_bg:
+			generate_bg = False
 
 		colors = [self.pick_random_colors(130, is_int = not generate_bg) for k in range(n)]
 
@@ -223,20 +229,28 @@ class FaceDetector:
 		while True:
 			ret, frame = cap.read()
 
+			landmark_dict = self.detect_face(frame)
+
 			if generate_bg:
-				if generate_bg_once:
+				if generate_bg_once:					
 					if not generated_bg:
 						bg_to_use = self.generate_square_background(frame, triangulate = triangulate_bg)
 						generated_bg = True
 				else:
 					bg_to_use = self.generate_square_background(frame, triangulate = triangulate_bg)
 
-			if bg_to_use is not None:
-				bg_to_use_c = bg_to_use.copy()
+			elif voronoi_bg and (not generated_bg):
+				bg_to_use = self.voronoi_bg(frame, landmark_dict, is_int = not generate_bg)
 
-			face_rect = self.triangulation(frame, self.detect_face(frame), colors = colors[i],
-				remove_bg = use_white_bg, generate_bg = generate_bg, bg_given = bg_to_use_c,
+				generated_bg = True
+
+			if bg_to_use is not None:
+				bg_to_use_c = bg_to_use.copy()	
+
+			face_rect = self.triangulation(frame, landmark_dict, colors = colors[i],
+				remove_bg = use_white_bg, generate_bg = (generate_bg or voronoi_bg), bg_given = bg_to_use_c,
 				exclude_pts = exclude_pts)
+
 			cv2.imshow('result', face_rect)
 
 			if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -247,6 +261,9 @@ class FaceDetector:
 			if j % k == 0:
 				i = (i + 1) % n
 				j = 0
+
+				if voronoi_bg and not generate_bg_once:
+					generated_bg = False
 
 		#Release camera capture and destroy all remaining windows
 		cap.release()
@@ -274,7 +291,9 @@ class FaceDetector:
 		while True:
 			ret, frame = cap.read()
 
-			face_rect = self.voronoi(frame, self.detect_face(frame), colors = colors[i], remove_bg = True)
+			landmark_dict = self.detect_face(frame)
+
+			face_rect = self.voronoi(frame, landmark_dict, colors = colors[i], remove_bg = True)
 			cv2.imshow('result', face_rect)
 
 			if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -323,8 +342,18 @@ class FaceDetector:
 
 		return square
 
+	def voronoi_bg(self, frame, landmark_dict, colors = None, random_colors = True, num_color_sets = 2, is_int = True):
+		if random_colors:
+			colors = self.pick_random_colors(num_color_sets, is_int = is_int)
+
+		bg = self.voronoi(frame, landmark_dict, colors = colors, remove_bg = True)
+
+		return bg
+
 if __name__ == '__main__':
 	fd = FaceDetector()
-
-	fd.triangulate_cam_face(0, generate_bg = True, generate_bg_once = True, use_white_bg = True, triangulate_bg = False, exclude_pts = [42, 39, 44, 47, 29, 33, 35, 62, 52, 63, 64, 65, 66, 67, 68, 61, 59, 57, 60, 56, 49, 37, 46])
-	#fd.voronoi_cam_face(0)
+	
+	exclude_pts = [42, 39, 44, 47, 29, 33, 35, 62, 52, 63, 64, 65, 66, 67, 68, 61, 59, 57, 60, 56, 49, 37, 46]
+	fd.triangulate_cam_face(0, num_color_sets = 2, change_per_k_frame = 10, generate_bg = True, generate_bg_once = True,
+	use_white_bg = False, triangulate_bg = False, voronoi_bg = True)
+	#fd.voronoi_cam_face(0, change_per_k_frame = 5, num_color_sets = 25)
